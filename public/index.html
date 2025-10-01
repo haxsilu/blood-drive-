@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>BloodDrive — Control Panel</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+  <meta http-equiv="Pragma" content="no-cache"/>
+  <meta http-equiv="Expires" content="0"/>
+  <style>
+    :root{ --tile:rgba(0,0,0,.04); }
+    @media (max-width: 640px){
+      .mobile-bottom-nav{
+        position: fixed; bottom: 0; left: 0; right: 0; padding:.5rem;
+        background: rgba(255,255,255,.97); border-top: 1px solid #e5e7eb;
+        display:flex; gap:.5rem; justify-content:space-between; z-index: 50;
+      }
+      body{ padding-bottom:72px; }
+    }
+    .pill{ padding:.15rem .5rem; border-radius:.5rem; font-size:.75rem; background:#eef2ff; color:#3730a3 }
+    .card{ background:#fff; border-radius:.75rem; box-shadow:0 4px 12px rgba(0,0,0,.05); padding:12px }
+    .btn{ padding:.5rem .75rem; border-radius:.5rem; background:#e5e7eb }
+    .btn-primary{ background:#2563eb; color:#fff }
+    .btn-warn{ background:#dc2626; color:#fff }
+    .btn-ok{ background:#059669; color:#fff }
+    .btn-sky{ background:#0ea5e9; color:#fff }
+    .btn-emerald{ background:#10b981; color:#fff }
+    .btn-purple{ background:#7c3aed; color:#fff }
+    .slide-grid{ display:grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap:1rem }
+    @media (min-width: 900px){ .slide-grid{ grid-template-columns: repeat(3,minmax(0,1fr)); } }
+    @media (min-width: 1280px){ .slide-grid{ grid-template-columns: repeat(4,minmax(0,1fr)); } }
+    .slide-tile{ background:var(--tile); border:1px solid #e5e7eb; border-radius:1rem; padding:1rem }
+    .slide-num{ font-size: clamp(2.6rem, 7vw, 6rem); font-weight:900; line-height:1; letter-spacing:.5px }
+    .slide-name{ font-size: clamp(.9rem, 2.2vw, 1.1rem); opacity:.9; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+    .slide-badge{ font-size:.75rem; padding:.15rem .5rem; border-radius:.5rem; border:1px solid #e5e7eb; color:#6b7280 }
+    .flash { animation: flash 900ms ease-out; }
+    @keyframes flash { 0%{ box-shadow:0 0 0 0 rgba(16,185,129,.9)} 60%{ box-shadow:0 0 0 18px rgba(16,185,129,0)} 100%{ box-shadow:none } }
+    .muted{ color:#6b7280 }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen text-gray-900">
+  <div class="max-w-7xl mx-auto p-4">
+    <header class="flex items-center gap-3 mb-4" aria-label="Header">
+      <h1 class="text-2xl font-bold">BloodDrive — Control Panel</h1>
+      <span id="conn" class="text-xs text-gray-500">connecting…</span>
+      <span id="mode" class="text-xs text-gray-400">(socket)</span>
+      <div class="ml-auto flex items-center gap-2">
+        <a href="/api/export.csv" class="btn" aria-label="Export CSV">Export CSV</a>
+        <button id="resetBtn" type="button" class="btn btn-warn" aria-label="Reset All Data">Reset</button>
+      </div>
+    </header>
+
+    <!-- Desktop nav -->
+    <nav class="hidden sm:flex flex-wrap gap-2 mb-4" aria-label="Primary">
+      <button class="tab btn btn-primary" type="button" data-tab="register">Register</button>
+      <button class="tab btn" type="button" data-tab="waiting">Waiting</button>
+      <button class="tab btn" type="button" data-tab="screening">Screening</button>
+      <button class="tab btn" type="button" data-tab="donation">Donation</button>
+      <button class="tab btn" type="button" data-tab="recovery">Recovery</button>
+      <button class="tab btn" type="button" data-tab="completed">Completed</button>
+      <button class="tab btn" type="button" data-tab="rejected">Rejected</button>
+      <button class="tab btn" type="button" data-tab="dashboard">Dashboard</button>
+      <button class="tab btn" type="button" data-tab="slide">Waiting Slide</button>
+    </nav>
+
+    <!-- Mobile nav -->
+    <nav class="mobile-bottom-nav sm:hidden" aria-label="Mobile">
+      <button class="tab btn btn-primary w-full" type="button" data-tab="register">📝</button>
+      <button class="tab btn w-full" type="button" data-tab="waiting">⏱️</button>
+      <button class="tab btn w-full" type="button" data-tab="screening">🩺</button>
+      <button class="tab btn w-full" type="button" data-tab="donation">💉</button>
+      <button class="tab btn w-full" type="button" data-tab="recovery">🥤</button>
+      <button class="tab btn w-full" type="button" data-tab="dashboard">📺</button>
+      <button class="tab btn w-full" type="button" data-tab="slide">🧾</button>
+    </nav>
+
+    <!-- REGISTER -->
+    <section id="register" class="tabpane" aria-labelledby="Register">
+      <div class="grid lg:grid-cols-2 gap-4">
+        <div class="card">
+          <h2 class="font-semibold mb-3">Manual Registration</h2>
+          <div class="grid gap-2">
+            <input id="fullName" class="border rounded px-3 py-3" placeholder="Full Name" autocomplete="off"/>
+            <input id="phone" class="border rounded px-3 py-3" placeholder="Phone (optional)" autocomplete="off"/>
+            <label class="inline-flex items-center gap-2"><input type="checkbox" id="preReg"/> Pre-Registered</label>
+            <label class="inline-flex items-center gap-2"><input type="checkbox" id="consent" checked/> Photo Consent</label>
+            <label class="inline-flex items-center gap-2"><input type="checkbox" id="hasPhoto"/> Has Photo (Booth)</label>
+            <button id="addBtn" type="button" class="btn btn-primary">Add Donor</button>
+          </div>
+        </div>
+        <div class="card">
+          <h2 class="font-semibold mb-3">Live Stats</h2>
+          <div id="stats" class="text-sm text-gray-600"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- WAITING -->
+    <section id="waiting" class="tabpane hidden" aria-labelledby="Waiting">
+      <div class="text-sm text-gray-600 mb-2">Send donors to Screening from here.</div>
+      <div id="listWaiting" class="grid gap-2"></div>
+    </section>
+
+    <!-- SCREENING -->
+    <section id="screening" class="tabpane hidden" aria-labelledby="Screening">
+      <div class="flex items-center gap-2 mb-2">
+        <input id="rejectReason" class="border rounded px-3 py-2 w-full sm:w-auto" placeholder="Rejection reason (optional)"/>
+      </div>
+      <div id="listScreening" class="grid gap-2"></div>
+    </section>
+
+    <!-- DONATION -->
+    <section id="donation" class="tabpane hidden" aria-labelledby="Donation">
+      <div class="grid md:grid-cols-2 gap-4">
+        <div class="card">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="font-semibold">Beds (max 6)</h3>
+            <span class="text-xs text-gray-500">Manual move or Auto</span>
+          </div>
+          <div id="listBeds" class="grid gap-2"></div>
+        </div>
+        <div class="card">
+          <div class="flex items-center gap-2 justify-between mb-2">
+            <h3 class="font-semibold">Chairs / Queue (max 6)</h3>
+            <div class="flex gap-2">
+              <button id="fillBedsStrict" type="button" class="btn btn-emerald"
+                title="Requires 4 Pre-Registered + 2 Walk-In currently in chairs">Fill Beds 4+2 (strict)</button>
+              <button id="fillBedsFifo" type="button" class="btn btn-sky"
+                title="Fill any open beds in FIFO order">Fill Beds (FIFO)</button>
+            </div>
+          </div>
+          <div id="listQueue" class="grid gap-2"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- RECOVERY -->
+    <section id="recovery" class="tabpane hidden" aria-labelledby="Recovery">
+      <div id="listRecovery" class="grid gap-2"></div>
+    </section>
+
+    <!-- COMPLETED -->
+    <section id="completed" class="tabpane hidden" aria-labelledby="Completed">
+      <div id="listCompleted" class="grid gap-2"></div>
+    </section>
+
+    <!-- REJECTED -->
+    <section id="rejected" class="tabpane hidden" aria-labelledby="Rejected">
+      <div id="listRejected" class="grid gap-2"></div>
+    </section>
+
+    <!-- DASHBOARD -->
+    <section id="dashboard" class="tabpane hidden" aria-labelledby="Dashboard">
+      <div class="card grid sm:grid-cols-3 gap-4 text-center">
+        <div class="p-4 rounded-lg bg-blue-50"><div class="text-4xl font-bold" id="kWaiting">0</div><div class="text-sm text-gray-600">Waiting</div></div>
+        <div class="p-4 rounded-lg bg-amber-50"><div class="text-4xl font-bold" id="kQueue">0</div><div class="text-sm text-gray-600">In Chairs</div></div>
+        <div class="p-4 rounded-lg bg-emerald-50"><div class="text-4xl font-bold" id="kBeds">0</div><div class="text-sm text-gray-600">In Beds</div></div>
+      </div>
+    </section>
+
+    <!-- WAITING SLIDE (inline) — Get Ready -->
+    <section id="slide" class="tabpane hidden" aria-labelledby="Waiting Slide">
+      <div class="flex items-center gap-3 mb-3">
+        <h2 class="font-semibold text-lg">Waiting Room — Get Ready</h2>
+        <span id="slideSub" class="text-xs text-gray-500">Top 12 by arrival</span>
+        <button id="slideFs" type="button" class="btn ml-auto">⛶ Fullscreen</button>
+      </div>
+      <div id="slideGrid" class="slide-grid"></div>
+    </section>
+  </div>
+
+<script>
+(function(){
+  // helpers
+  const $ = (id)=> document.getElementById(id);
+  const esc = (s)=> String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  const pill = (t)=> '<span class="pill">'+esc(t)+'</span>';
+  const btn  = (label, action, id, cls='btn') => '<button type="button" class="'+cls+'" data-action="'+action+'" data-id="'+id+'">'+esc(label)+'</button>';
+
+  // tabs
+  function showTab(name){
+    document.querySelectorAll('.tab').forEach(x=> x.classList.toggle('btn-primary', x.dataset.tab===name));
+    document.querySelectorAll('.tabpane').forEach(p=> p.classList.add('hidden'));
+    (document.getElementById(name) || document.getElementById('register')).classList.remove('hidden');
+    if (location.hash !== '#'+name) history.replaceState(null,'','#'+name);
+  }
+  document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', ()=> showTab(b.dataset.tab)));
+  window.addEventListener('hashchange', ()=> showTab((location.hash||'#register').slice(1)));
+  showTab((location.hash||'#register').slice(1));
+
+  // live state: socket + polling fallback
+  let state = { donors: [], meta: { nextDonorNo: 1 } };
+  let pollTimer = null;
+
+  function renderFromServer(s){ state = s; render(); }
+
+  async function startPolling(){
+    clearInterval(pollTimer);
+    $('mode').textContent = '(polling)';
+    $('conn').textContent = 'polling';
+    const poll = async () => {
+      try{
+        const r = await fetch('/api/state?v='+Date.now(), { cache:'no-store' });
+        if (r.ok) renderFromServer(await r.json());
+      }catch(e){}
+    };
+    await poll();
+    pollTimer = setInterval(poll, 3000);
+  }
+
+  // try socket
+  try{
+    const socket = io();
+    $('mode').textContent = '(socket)';
+    socket.on('connect',    ()=> { $('conn').textContent='connected'; clearInterval(pollTimer); });
+    socket.on('disconnect', ()=> { $('conn').textContent='offline'; startPolling(); });
+    socket.on('state', renderFromServer);
+  }catch(e){
+    // if socket script not reachable, fall back
+    startPolling();
+  }
+
+  // header actions
+  $('resetBtn').addEventListener('click', async ()=>{
+    if (!confirm('Reset ALL data?')) return;
+    await fetch('/api/reset',{ method:'POST' });
+  });
+  $('addBtn').addEventListener('click', async ()=>{
+    const body = {
+      FullName: $('fullName').value.trim(),
+      Phone: $('phone').value.trim(),
+      PreRegistered: document.getElementById('preReg').checked,
+      PhotoConsent: document.getElementById('consent').checked,
+      HasPhoto: document.getElementById('hasPhoto').checked,
+    };
+    if (!body.FullName) { alert('Full Name required'); $('fullName').focus(); return; }
+    try{
+      const r = await fetch('/api/register',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+      if (!r.ok) { const j = await r.json().catch(()=>({})); alert(j.error || 'Register failed'); return; }
+      $('fullName').value=''; $('phone').value=''; document.getElementById('preReg').checked=false; document.getElementById('hasPhoto').checked=false; document.getElementById('consent').checked=true;
+    }catch{
+      alert('Cannot reach server. Make sure `npm start` is running.');
+    }
+  });
+
+  // action delegation
+  function delegate(containerId, map){
+    const el = $(containerId);
+    el.addEventListener('click', async (e)=>{
+      const b = e.target.closest('button[data-action]');
+      if (!b) return;
+      const id = b.dataset.id;
+      const action = b.dataset.action;
+      const fn = map[action];
+      if (!fn) return;
+      try{
+        const res = await fn(id);
+        if (res && !res.ok) {
+          const j = await res.json().catch(()=>({}));
+          alert(j.error || 'Action failed');
+        }
+      }catch{
+        alert('Action failed (server unreachable)');
+      }
+    });
+  }
+
+  const api = {
+    toScreening: (id)=> fetch('/api/action/send-to-screening',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id }) }),
+    approve: async (id)=> {
+      const r = await fetch('/api/action/approve',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id }) });
+      if (!r.ok) { const j = await r.json().catch(()=>({})); alert(j.error || 'Unable to approve'); }
+    },
+    reject:  (id)=> {
+      const reason = $('rejectReason').value.trim();
+      return fetch('/api/action/reject',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id, reason }) });
+    },
+    moveToBed: (id)=> fetch('/api/action/move-to-bed',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id }) }),
+    fillStrict: ()=> fetch('/api/action/fill-beds-4p2',{ method:'POST' }),
+    fillFifo:   ()=> fetch('/api/action/fill-beds-fifo',{ method:'POST' }),
+    toRecovery: (id)=> fetch('/api/action/to-recovery',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id }) }),
+    recovered:  (id)=> fetch('/api/action/recovered',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id }) }),
+    complete:   (id)=> fetch('/api/action/complete',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id }) }),
+  };
+
+  // donation buttons
+  $('fillBedsStrict').addEventListener('click', async ()=>{
+    const r = await api.fillStrict();
+    if (!r.ok) {
+      const j = await r.json().catch(()=>({}));
+      alert(j.error || '4+2 not available now');
+    }
+  });
+  $('fillBedsFifo').addEventListener('click', ()=> api.fillFifo());
+
+  // list delegates
+  delegate('listWaiting',   { 'toScreening': api.toScreening });
+  delegate('listScreening', { 'approve': api.approve, 'reject': api.reject });
+  delegate('listBeds',      { 'toRecovery': api.toRecovery });
+  delegate('listRecovery',  { 'recovered': api.recovered, 'complete': api.complete });
+  delegate('listQueue',     { 'moveToBed': api.moveToBed });
+
+  // UI builders
+  const card = (d, buttons='') =>
+    '<div class="card">'
+    + '<div class="flex items-center justify-between">'
+    +   '<div class="font-semibold">#'+esc(d.DonorID)+' — '+esc(d.FullName)+'</div>'
+    +   '<div class="text-xs '+(d.PreRegistered?'text-emerald-700':'text-indigo-700')+'">'+(d.PreRegistered ? 'Pre-Registered' : 'Walk-In')+'</div>'
+    + '</div>'
+    + '<div class="text-xs text-gray-600 flex gap-2 items-center flex-wrap">'
+    +   pill(d.Status)+' <span>Screening: <b>'+esc(d.ScreeningStatus)+'</b></span>'
+    + '</div>'
+    + '<div class="pt-2 flex flex-wrap gap-2">'+buttons+'</div>'
+    + '</div>';
+
+  const slideTile = (d) =>
+    '<div class="slide-tile" data-id="'+d.id+'">'
+    + '<div class="slide-num">#'+esc(d.DonorID)+'</div>'
+    + '<div class="slide-name">'+esc(d.FullName)+'</div>'
+    + '<div class="slide-badge">'+(d.PreRegistered ? 'Pre-Registered' : 'Walk-In')+'</div>'
+    + '</div>';
+
+  // inline waiting slide — show *Waiting* top 12
+  let slideLastIds = new Set();
+  function renderWaitingSlide(donors){
+    const w = (donors || [])
+      .filter(d => d.Status === 'Waiting')
+      .sort((a,b)=> new Date(a.RegisteredAt||0) - new Date(b.RegisteredAt||0))
+      .slice(0, 12);
+
+    const current = new Set(w.map(d=> d.id));
+    const newOnes = [];
+    current.forEach(id => { if (!slideLastIds.has(id)) newOnes.push(id); });
+
+    const grid = $('slideGrid');
+    if (grid){
+      grid.innerHTML = w.map(slideTile).join('') || '<div class="slide-tile col-span-2 md:col-span-3 xl:col-span-4 text-center">'
+        + '<div class="slide-num">—</div>'
+        + '<div class="slide-name">Waiting to begin…</div>'
+        + '</div>';
+      newOnes.forEach(id => {
+        const el = grid.querySelector('.slide-tile[data-id="'+id+'"]');
+        if (el){ el.classList.add('flash'); setTimeout(()=>el.classList.remove('flash'), 900); }
+      });
+      slideLastIds = current;
+    }
+  }
+
+  // fullscreen for slide
+  const slideFsBtn = $('slideFs');
+  if (slideFsBtn){
+    slideFsBtn.addEventListener('click', ()=>{
+      const pane = $('slide');
+      if (!document.fullscreenElement) (pane || document.documentElement).requestFullscreen().catch(()=>{});
+      else document.exitFullscreen();
+    });
+  }
+
+  // render all
+  function render(){
+    const donors = state.donors || [];
+    const waitingN  = donors.filter(d=>d.Status==='Waiting').length;
+    const screenN   = donors.filter(d=>d.Status==='Screening').length;
+    const queueN    = donors.filter(d=>d.Status==='Donation-Queue').length;
+    const bedsN     = donors.filter(d=>d.Status==='Donation-In-Progress').length;
+
+    $('stats').textContent = 'Waiting: '+waitingN+' • Screening: '+screenN+' • Chairs: '+queueN+'/6 • Beds: '+bedsN+'/6';
+
+    $('listWaiting').innerHTML = donors
+      .filter(d=>d.Status==='Waiting')
+      .sort((a,b)=> new Date(a.RegisteredAt)-new Date(b.RegisteredAt))
+      .map(d => card(d, btn('Send to Screening', 'toScreening', d.id, 'btn btn-purple')))
+      .join('') || '<div class="text-sm muted">No donors in waiting.</div>';
+
+    $('listScreening').innerHTML = donors
+      .filter(d=>d.Status==='Screening')
+      .sort((a,b)=> new Date(a.ScreeningStartAt||a.RegisteredAt) - new Date(b.ScreeningStartAt||b.RegisteredAt))
+      .map(d => card(d, btn('Approve (to Chairs)', 'approve', d.id, 'btn btn-ok') + ' ' + btn('Reject', 'reject', d.id, 'btn btn-warn')))
+      .join('') || '<div class="text-sm muted">No donors in screening.</div>';
+
+    $('listBeds').innerHTML = donors
+      .filter(d=>d.Status==='Donation-In-Progress')
+      .sort((a,b)=> new Date(a.DonationStartAt||0) - new Date(b.DonationStartAt||0))
+      .map(d => card(d, btn('To Recovery', 'toRecovery', d.id, 'btn btn-sky')))
+      .join('') || '<div class="text-sm muted">No one in beds.</div>';
+
+    $('listQueue').innerHTML = donors
+      .filter(d=>d.Status==='Donation-Queue')
+      .sort((a,b)=> new Date(a.ApprovedAt||0) - new Date(b.ApprovedAt||0))
+      .map(d => card(d, btn('Move to Bed', 'moveToBed', d.id, 'btn btn-primary')))
+      .join('') || '<div class="text-sm muted">No one in chairs.</div>';
+
+    $('listRecovery').innerHTML = donors
+      .filter(d=>d.Status==='Recovery')
+      .map(d => card(d, btn('Recovered', 'recovered', d.id, 'btn') + ' ' + btn('Complete & Give Pack', 'complete', d.id, 'btn btn-emerald')))
+      .join('') || '<div class="text-sm muted">No one in recovery.</div>';
+
+    $('listCompleted').innerHTML = donors
+      .filter(d=>d.Status==='Completed & Left')
+      .map(d=> card(d, ''))
+      .join('') || '<div class="text-sm muted">No completed donors yet.</div>';
+
+    $('listRejected').innerHTML = donors
+      .filter(d=>d.Status==='Rejected')
+      .map(d=> card(d, ''))
+      .join('') || '<div class="text-sm muted">No rejected donors.</div>';
+
+    $('kWaiting').textContent = waitingN;
+    $('kQueue').textContent   = queueN+'/6';
+    $('kBeds').textContent    = bedsN+'/6';
+
+    renderWaitingSlide(donors);
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>
