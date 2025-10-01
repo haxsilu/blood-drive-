@@ -9,6 +9,13 @@ import { nanoid } from 'nanoid';
 import path from 'path';
 import fs from 'fs';
 
+process.on('uncaughtException', (err) => {
+  console.error('[uncaughtException]', err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[unhandledRejection]', reason);
+});
+
 const __dirname = path.resolve();
 const app = express();
 const httpServer = createServer(app);
@@ -19,18 +26,21 @@ const io = new Server(httpServer, {
   pingTimeout: 20000
 });
 
+// --- middleware
 app.use(cors());
 app.use(compression());
 app.use(express.json());
 
-// Static files: cache assets, never cache HTML (so updates take effect)
+// static with cache (don’t cache HTML)
 const ONE_WEEK = 1000 * 60 * 60 * 24 * 7;
 app.use(express.static(path.join(__dirname, 'public'), {
   maxAge: ONE_WEEK,
   etag: true,
   lastModified: true,
   setHeaders: (res, fp) => {
-    if (fp.endsWith('.html')) res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    if (fp.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    }
   }
 }));
 
@@ -40,31 +50,62 @@ if (process.env.NODE_ENV !== 'production') {
 
 app.get('/health', (_req, res) => res.json({ ok: true, time: new Date().toISOString() }));
 
-// --- DB bootstrap (Railway/Render friendly) ---
+// --- DB bootstrap (Railway/Render friendly & resilient)
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'server');
 fs.mkdirSync(DATA_DIR, { recursive: true });
 const dbFile = path.join(DATA_DIR, 'db.json');
-if (!fs.existsSync(dbFile)) {
-  fs.writeFileSync(dbFile, JSON.stringify({ donors: [], meta: { nextDonorNo: 1, lastBatch: 0, batches: [] } }, null, 2));
-}
-const adapter = new JSONFile(dbFile);
-const db = new Low(adapter, { donors: [], meta: { nextDonorNo: 1, lastBatch: 0, batches: [] } });
-await db.read();
 
-// ---- broadcast/write coalescing (reduce chatter & disk I/O) ----
+function freshData() {
+  return { donors: [], meta: { nextDonorNo: 1, lastBatch: 0, batches: [] } };
+}
+
+if (!fs.existsSync(dbFile)) {
+  fs.writeFileSync(dbFile, JSON.stringify(freshData(), null, 2));
+}
+
+let adapter = new JSONFile(dbFile);
+let db = new Low(adapter, freshData());
+
+// Try to read; if corrupted, back it up and recreate
+async function safeRead() {
+  try {
+    await db.read();
+    if (!db.data || typeof db.data !== 'object') throw new Error('Empty/invalid DB');
+  } catch (e) {
+    console.error('[DB] read failed, backing up and recreating:', e.message);
+    try {
+      const backup = path.join(DATA_DIR, `db.backup-${Date.now()}.json`);
+      fs.copyFileSync(dbFile, backup);
+      fs.writeFileSync(dbFile, JSON.stringify(freshData(), null, 2));
+    } catch (e2) {
+      console.error('[DB] backup/create failed:', e2);
+    }
+    // re-init
+    adapter = new JSONFile(dbFile);
+    db = new Low(adapter, freshData());
+    await db.read();
+  }
+}
+await safeRead();
+
+// ---- broadcast/write coalescing
 let _broadcastTimer = null;
 function lightDonor(d){
   const { id, DonorID, FullName, PreRegistered, Status, ScreeningStatus, RegisteredAt, ApprovedAt, DonationStartAt } = d;
   return { id, DonorID, FullName, PreRegistered, Status, ScreeningStatus, RegisteredAt, ApprovedAt, DonationStartAt };
 }
 function lightState(){
-  return { donors: db.data.donors.map(lightDonor), meta: db.data.meta };
+  return { donors: (db.data.donors || []).map(lightDonor), meta: db.data.meta };
 }
 function broadcastCoalesced() {
   if (_broadcastTimer) return;
   _broadcastTimer = setTimeout(() => {
     _broadcastTimer = null;
-    io.emit('state', lightState());
+    try {
+      io.emit('state', lightState());
+    } catch (e) {
+      console.error('[broadcast] error', e);
+    }
   }, 80);
 }
 let _writeTimer = null;
@@ -72,7 +113,7 @@ async function writeCoalesced() {
   if (_writeTimer) return;
   _writeTimer = setTimeout(async () => {
     _writeTimer = null;
-    await db.write();
+    try { await db.write(); } catch (e) { console.error('[db.write] error', e); }
   }, 80);
 }
 const save = async () => { await writeCoalesced(); broadcastCoalesced(); };
@@ -81,24 +122,25 @@ io.on('connection', (socket) => {
   socket.emit('state', lightState());
 });
 
-// --- constants ---
+// --- constants
 const MAX_BEDS = 6;
 const MAX_QUEUE = 6;
 const PRE_STRICT = 4;
 const WALK_STRICT = 2;
 
-const donorsBy = (pred) => db.data.donors.filter(pred);
+const donorsBy = (pred) => (db.data.donors || []).filter(pred);
 const byDate = (arr, key) => arr.sort((a,b)=> new Date(a[key]||0) - new Date(b[key]||0));
 const bedsInUse = () => donorsBy(d => d.Status === 'Donation-In-Progress').length;
 const bedsAvail = () => Math.max(0, MAX_BEDS - bedsInUse());
 const countQueue = () => donorsBy(d => d.Status === 'Donation-Queue').length;
 const now = () => new Date().toISOString();
 
-// --- FLOW ---
+// --- FLOW
 app.post('/api/register', async (req, res) => {
   try {
     const { FullName, Phone = '', PreRegistered = false, PhotoConsent = true, HasPhoto = false } = req.body || {};
     if (!FullName) return res.status(400).json({ error: 'Full Name required' });
+
     const donor = {
       id: nanoid(10),
       DonorID: String(db.data.meta.nextDonorNo++),
@@ -190,16 +232,16 @@ app.post('/api/action/fill-beds-4p2', async (_req, res) => {
   let avail = bedsAvail(); if (avail <= 0) return res.json({ moved: 0, reason: 'no_bed' });
   const preQ  = byDate(donorsBy(d => d.Status === 'Donation-Queue' && d.PreRegistered), 'ApprovedAt');
   const walkQ = byDate(donorsBy(d => d.Status === 'Donation-Queue' && !d.PreRegistered), 'ApprovedAt');
-  if (preQ.length < PRE_STRICT || walkQ.length < WALK_STRICT) {
-    return res.status(409).json({ error: `Need at least ${PRE_STRICT} pre-reg and ${WALK_STRICT} walk-in in chairs` });
+  if (preQ.length < 4 || walkQ.length < 2) {
+    return res.status(409).json({ error: 'Need at least 4 pre-reg and 2 walk-in in chairs' });
   }
   let moved = 0;
   const take = (arr)=> {
     if (avail<=0 || !arr.length) return;
     const d = arr.shift(); d.Status='Donation-In-Progress'; d.DonationStartAt=now(); avail--; moved++;
   };
-  for (let i=0;i<PRE_STRICT && avail>0;i++) take(preQ);
-  for (let i=0;i<WALK_STRICT && avail>0;i++) take(walkQ);
+  for (let i=0;i<4 && avail>0;i++) take(preQ);
+  for (let i=0;i<2 && avail>0;i++) take(walkQ);
   await save();
   res.json({ moved });
 });
@@ -240,7 +282,7 @@ app.post('/api/action/complete', async (req, res) => {
   res.json(d);
 });
 
-// Raw state & export
+// state & export
 app.get('/api/state', (_req, res) => res.json(lightState()));
 app.get('/api/export.csv', (_req, res) => {
   const cols = [
@@ -250,7 +292,7 @@ app.get('/api/export.csv', (_req, res) => {
     'RecoveryEndAt','CompletedAt','RejectedAt','RejectionReason'
   ];
   const csv = [cols.join(',')].concat(
-    db.data.donors.map(d => cols.map(c => JSON.stringify(d[c] ?? '')).join(','))
+    (db.data.donors || []).map(d => cols.map(c => JSON.stringify(d[c] ?? '')).join(','))
   ).join('\n');
   res.setHeader('Content-Type', 'text/csv');
   res.setHeader('Content-Disposition', 'attachment; filename="donors.csv"');
@@ -259,7 +301,7 @@ app.get('/api/export.csv', (_req, res) => {
 
 // Reset
 app.post('/api/reset', async (_req, res) => {
-  db.data = { donors: [], meta: { nextDonorNo: 1, lastBatch: 0, batches: [] } };
+  db.data = freshData();
   await save();
   res.json({ ok: true });
 });
