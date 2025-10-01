@@ -1,0 +1,20 @@
+{
+  "name": "blooddrive-realtime",
+  "version": "1.0.0",
+  "description": "Local real-time blood drive tracker",
+  "type": "module",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "nodemon server/index.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "lowdb": "^7.0.1",
+    "nanoid": "^5.0.7",
+    "socket.io": "^4.7.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  }
+}
