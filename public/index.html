@@ -10,14 +10,14 @@
   <meta http-equiv="Pragma" content="no-cache"/>
   <meta http-equiv="Expires" content="0"/>
   <style>
-    :root{ --tile:rgba(0,0,0,.04); }
-    @media (max-width: 640px){
-      .mobile-bottom-nav{
-        position: fixed; bottom: 0; left: 0; right: 0; padding:.5rem;
-        background: rgba(255,255,255,.97); border-top: 1px solid #e5e7eb;
-        display:flex; gap:.5rem; justify-content:space-between; z-index: 50;
-      }
-      body{ padding-bottom:72px; }
+    :root{
+      --tile: rgba(255,255,255,.75);
+      --bg1: #0f172a; /* slate-900 */
+      --bg2: #111827; /* gray-900 */
+      --accent: #22c55e; /* emerald-500 */
+      --accent2: #38bdf8; /* sky-400 */
+      --pre: #10b981;     /* pre-reg green */
+      --walk: #6366f1;    /* walk-in indigo */
     }
     .pill{ padding:.15rem .5rem; border-radius:.5rem; font-size:.75rem; background:#eef2ff; color:#3730a3 }
     .card{ background:#fff; border-radius:.75rem; box-shadow:0 4px 12px rgba(0,0,0,.05); padding:12px }
@@ -28,16 +28,69 @@
     .btn-sky{ background:#0ea5e9; color:#fff }
     .btn-emerald{ background:#10b981; color:#fff }
     .btn-purple{ background:#7c3aed; color:#fff }
-    .slide-grid{ display:grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap:1rem }
+    .muted{ color:#6b7280 }
+
+    /* Beautiful fullscreen waiting */
+    .slide-wrap{
+      background: radial-gradient(1200px 600px at 20% -10%, rgba(34,197,94,.25), transparent 60%),
+                  radial-gradient(1200px 600px at 80% -20%, rgba(56,189,248,.25), transparent 60%),
+                  linear-gradient(160deg, var(--bg1), var(--bg2));
+      border-radius: 1rem;
+      padding: 1rem;
+      border: 1px solid rgba(255,255,255,.06);
+      box-shadow: inset 0 1px rgba(255,255,255,.05), 0 10px 30px rgba(0,0,0,.25);
+      color: #e5e7eb;
+    }
+    .slide-header{
+      display:flex; align-items:center; gap:.75rem; margin-bottom:.75rem;
+    }
+    .slide-title{ font-weight:800; letter-spacing:.4px; }
+    .slide-clock{ font-variant-numeric: tabular-nums; opacity:.8; }
+    .slide-grid{
+      display:grid; gap:14px;
+      grid-template-columns: repeat(2,minmax(0,1fr));
+    }
     @media (min-width: 900px){ .slide-grid{ grid-template-columns: repeat(3,minmax(0,1fr)); } }
     @media (min-width: 1280px){ .slide-grid{ grid-template-columns: repeat(4,minmax(0,1fr)); } }
-    .slide-tile{ background:var(--tile); border:1px solid #e5e7eb; border-radius:1rem; padding:1rem }
-    .slide-num{ font-size: clamp(2.6rem, 7vw, 6rem); font-weight:900; line-height:1; letter-spacing:.5px }
-    .slide-name{ font-size: clamp(.9rem, 2.2vw, 1.1rem); opacity:.9; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
-    .slide-badge{ font-size:.75rem; padding:.15rem .5rem; border-radius:.5rem; border:1px solid #e5e7eb; color:#6b7280 }
+
+    .tile{
+      background: var(--tile);
+      backdrop-filter: blur(6px);
+      border: 1px solid rgba(255,255,255,.2);
+      border-radius: 18px;
+      padding: 18px;
+      color:#0b1020;
+      display:flex; gap:12px; align-items:center;
+      box-shadow: 0 6px 16px rgba(0,0,0,.15);
+      transition: transform .18s ease, box-shadow .18s ease;
+    }
+    .tile:hover{ transform: translateY(-1px); box-shadow:0 10px 22px rgba(0,0,0,.2); }
+    .num{
+      font-size: clamp(2.2rem, 6.8vw, 5rem);
+      font-weight: 900; line-height: .9;
+      color:#0b1020;
+      text-shadow: 0 1px 0 rgba(255,255,255,.35);
+      min-width: 2.6ch; text-align:right;
+    }
+    .info{ flex:1; min-width: 0; }
+    .name{
+      font-size: clamp(1rem,2.4vw,1.25rem);
+      font-weight: 700; white-space:nowrap; overflow:hidden; text-overflow: ellipsis;
+      color:#111827;
+    }
+    .badges{ display:flex; gap:6px; flex-wrap:wrap; margin-top:4px }
+    .badge{
+      padding:.18rem .55rem; font-size:.75rem; border:1px solid rgba(0,0,0,.08); border-radius:.5rem;
+      background: #fff; color:#374151;
+    }
+    .badge.pre{ border-color: rgba(16,185,129,.35); color:#065f46; background: rgba(16,185,129,.1); }
+    .badge.walk{ border-color: rgba(99,102,241,.35); color:#3730a3; background: rgba(99,102,241,.1); }
+
     .flash { animation: flash 900ms ease-out; }
-    @keyframes flash { 0%{ box-shadow:0 0 0 0 rgba(16,185,129,.9)} 60%{ box-shadow:0 0 0 18px rgba(16,185,129,0)} 100%{ box-shadow:none } }
-    .muted{ color:#6b7280 }
+    @keyframes flash { 0%{ box-shadow:0 0 0 0 rgba(16,185,129,.9)} 60%{ box-shadow:0 0 0 22px rgba(16,185,129,0)} 100%{ box-shadow:none } }
+
+    /* Fullscreen button subtle */
+    .fs-btn{ background:rgba(255,255,255,.1); color:#e5e7eb; border:1px solid rgba(255,255,255,.15) }
   </style>
 </head>
 <body class="bg-gray-50 min-h-screen text-gray-900">
@@ -66,14 +119,16 @@
     </nav>
 
     <!-- Mobile nav -->
-    <nav class="mobile-bottom-nav sm:hidden" aria-label="Mobile">
-      <button class="tab btn btn-primary w-full" type="button" data-tab="register">📝</button>
-      <button class="tab btn w-full" type="button" data-tab="waiting">⏱️</button>
-      <button class="tab btn w-full" type="button" data-tab="screening">🩺</button>
-      <button class="tab btn w-full" type="button" data-tab="donation">💉</button>
-      <button class="tab btn w-full" type="button" data-tab="recovery">🥤</button>
-      <button class="tab btn w-full" type="button" data-tab="dashboard">📺</button>
-      <button class="tab btn w-full" type="button" data-tab="slide">🧾</button>
+    <nav class="mobile-bottom-nav sm:hidden fixed bottom-0 left-0 right-0 p-2 bg-white/95 border-t border-gray-200 z-50" aria-label="Mobile">
+      <div class="grid grid-cols-7 gap-2">
+        <button class="tab btn btn-primary" type="button" data-tab="register">📝</button>
+        <button class="tab btn" type="button" data-tab="waiting">⏱️</button>
+        <button class="tab btn" type="button" data-tab="screening">🩺</button>
+        <button class="tab btn" type="button" data-tab="donation">💉</button>
+        <button class="tab btn" type="button" data-tab="recovery">🥤</button>
+        <button class="tab btn" type="button" data-tab="dashboard">📺</button>
+        <button class="tab btn" type="button" data-tab="slide">🧾</button>
+      </div>
     </nav>
 
     <!-- REGISTER -->
@@ -117,7 +172,6 @@
         <div class="card">
           <div class="flex items-center justify-between mb-2">
             <h3 class="font-semibold">Beds (max 6)</h3>
-            <span class="text-xs text-gray-500">Manual move or Auto</span>
           </div>
           <div id="listBeds" class="grid gap-2"></div>
         </div>
@@ -160,26 +214,29 @@
       </div>
     </section>
 
-    <!-- WAITING SLIDE (inline) — Get Ready -->
+    <!-- 🔥 WAITING SLIDE (Beautiful Fullscreen) -->
     <section id="slide" class="tabpane hidden" aria-labelledby="Waiting Slide">
-      <div class="flex items-center gap-3 mb-3">
-        <h2 class="font-semibold text-lg">Waiting Room — Get Ready</h2>
-        <span id="slideSub" class="text-xs text-gray-500">Top 12 by arrival</span>
-        <button id="slideFs" type="button" class="btn ml-auto">⛶ Fullscreen</button>
+      <div class="slide-wrap">
+        <div class="slide-header">
+          <h2 class="slide-title text-xl sm:text-2xl">Waiting Room — Get Ready</h2>
+          <span id="slideClock" class="slide-clock text-sm ml-2"></span>
+          <div class="ml-auto flex items-center gap-2">
+            <button id="slideFs" type="button" class="btn fs-btn">⛶ Fullscreen</button>
+          </div>
+        </div>
+        <div id="slideGrid" class="slide-grid"></div>
       </div>
-      <div id="slideGrid" class="slide-grid"></div>
     </section>
   </div>
 
 <script>
 (function(){
-  // helpers
   const $ = (id)=> document.getElementById(id);
   const esc = (s)=> String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
   const pill = (t)=> '<span class="pill">'+esc(t)+'</span>';
   const btn  = (label, action, id, cls='btn') => '<button type="button" class="'+cls+'" data-action="'+action+'" data-id="'+id+'">'+esc(label)+'</button>';
 
-  // tabs
+  // Tabs
   function showTab(name){
     document.querySelectorAll('.tab').forEach(x=> x.classList.toggle('btn-primary', x.dataset.tab===name));
     document.querySelectorAll('.tabpane').forEach(p=> p.classList.add('hidden'));
@@ -190,39 +247,40 @@
   window.addEventListener('hashchange', ()=> showTab((location.hash||'#register').slice(1)));
   showTab((location.hash||'#register').slice(1));
 
-  // live state: socket + polling fallback
+  // Live state: socket + polling fallback
   let state = { donors: [], meta: { nextDonorNo: 1 } };
   let pollTimer = null;
 
-  function renderFromServer(s){ state = s; render(); }
+  function setConn(mode, text){
+    const m = $('mode'); const c = $('conn');
+    if (m) m.textContent = mode;
+    if (c) c.textContent = text;
+  }
+
+  function renderFromServer(s){ state = s; scheduleRender(); }
 
   async function startPolling(){
     clearInterval(pollTimer);
-    $('mode').textContent = '(polling)';
-    $('conn').textContent = 'polling';
+    setConn('(polling)', 'polling');
     const poll = async () => {
       try{
         const r = await fetch('/api/state?v='+Date.now(), { cache:'no-store' });
         if (r.ok) renderFromServer(await r.json());
-      }catch(e){}
+      }catch{}
     };
     await poll();
-    pollTimer = setInterval(poll, 3000);
+    pollTimer = setInterval(poll, 4000);
   }
 
-  // try socket
   try{
     const socket = io();
-    $('mode').textContent = '(socket)';
-    socket.on('connect',    ()=> { $('conn').textContent='connected'; clearInterval(pollTimer); });
-    socket.on('disconnect', ()=> { $('conn').textContent='offline'; startPolling(); });
+    setConn('(socket)', 'connected');
+    socket.on('connect', ()=> { setConn('(socket)', 'connected'); clearInterval(pollTimer); });
+    socket.on('disconnect', ()=> { setConn('(socket)', 'offline'); startPolling(); });
     socket.on('state', renderFromServer);
-  }catch(e){
-    // if socket script not reachable, fall back
-    startPolling();
-  }
+  }catch{ startPolling(); }
 
-  // header actions
+  // Actions
   $('resetBtn').addEventListener('click', async ()=>{
     if (!confirm('Reset ALL data?')) return;
     await fetch('/api/reset',{ method:'POST' });
@@ -240,20 +298,16 @@
       const r = await fetch('/api/register',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
       if (!r.ok) { const j = await r.json().catch(()=>({})); alert(j.error || 'Register failed'); return; }
       $('fullName').value=''; $('phone').value=''; document.getElementById('preReg').checked=false; document.getElementById('hasPhoto').checked=false; document.getElementById('consent').checked=true;
-    }catch{
-      alert('Cannot reach server. Make sure `npm start` is running.');
-    }
+    }catch{ alert('Cannot reach server.'); }
   });
 
-  // action delegation
   function delegate(containerId, map){
     const el = $(containerId);
     el.addEventListener('click', async (e)=>{
       const b = e.target.closest('button[data-action]');
       if (!b) return;
       const id = b.dataset.id;
-      const action = b.dataset.action;
-      const fn = map[action];
+      const fn = map[b.dataset.action];
       if (!fn) return;
       try{
         const res = await fn(id);
@@ -261,9 +315,7 @@
           const j = await res.json().catch(()=>({}));
           alert(j.error || 'Action failed');
         }
-      }catch{
-        alert('Action failed (server unreachable)');
-      }
+      }catch{ alert('Action failed'); }
     });
   }
 
@@ -285,17 +337,12 @@
     complete:   (id)=> fetch('/api/action/complete',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id }) }),
   };
 
-  // donation buttons
-  $('fillBedsStrict').addEventListener('click', async ()=>{
+  $('fillBedsStrict')?.addEventListener('click', async ()=>{
     const r = await api.fillStrict();
-    if (!r.ok) {
-      const j = await r.json().catch(()=>({}));
-      alert(j.error || '4+2 not available now');
-    }
+    if (!r.ok) { const j = await r.json().catch(()=>({})); alert(j.error || '4+2 not available'); }
   });
-  $('fillBedsFifo').addEventListener('click', ()=> api.fillFifo());
+  $('fillBedsFifo')?.addEventListener('click', ()=> api.fillFifo());
 
-  // list delegates
   delegate('listWaiting',   { 'toScreening': api.toScreening });
   delegate('listScreening', { 'approve': api.approve, 'reject': api.reject });
   delegate('listBeds',      { 'toRecovery': api.toRecovery });
@@ -310,55 +357,83 @@
     +   '<div class="text-xs '+(d.PreRegistered?'text-emerald-700':'text-indigo-700')+'">'+(d.PreRegistered ? 'Pre-Registered' : 'Walk-In')+'</div>'
     + '</div>'
     + '<div class="text-xs text-gray-600 flex gap-2 items-center flex-wrap">'
-    +   pill(d.Status)+' <span>Screening: <b>'+esc(d.ScreeningStatus)+'</b></span>'
+    +   pill(d.Status)+' <span>Screening: <b>'+esc(d.ScreeningStatus||'')+'</b></span>'
     + '</div>'
     + '<div class="pt-2 flex flex-wrap gap-2">'+buttons+'</div>'
     + '</div>';
 
-  const slideTile = (d) =>
-    '<div class="slide-tile" data-id="'+d.id+'">'
-    + '<div class="slide-num">#'+esc(d.DonorID)+'</div>'
-    + '<div class="slide-name">'+esc(d.FullName)+'</div>'
-    + '<div class="slide-badge">'+(d.PreRegistered ? 'Pre-Registered' : 'Walk-In')+'</div>'
-    + '</div>';
-
-  // inline waiting slide — show *Waiting* top 12
-  let slideLastIds = new Set();
-  function renderWaitingSlide(donors){
-    const w = (donors || [])
-      .filter(d => d.Status === 'Waiting')
-      .sort((a,b)=> new Date(a.RegisteredAt||0) - new Date(b.RegisteredAt||0))
-      .slice(0, 12);
-
-    const current = new Set(w.map(d=> d.id));
-    const newOnes = [];
-    current.forEach(id => { if (!slideLastIds.has(id)) newOnes.push(id); });
-
-    const grid = $('slideGrid');
-    if (grid){
-      grid.innerHTML = w.map(slideTile).join('') || '<div class="slide-tile col-span-2 md:col-span-3 xl:col-span-4 text-center">'
-        + '<div class="slide-num">—</div>'
-        + '<div class="slide-name">Waiting to begin…</div>'
-        + '</div>';
-      newOnes.forEach(id => {
-        const el = grid.querySelector('.slide-tile[data-id="'+id+'"]');
-        if (el){ el.classList.add('flash'); setTimeout(()=>el.classList.remove('flash'), 900); }
-      });
-      slideLastIds = current;
-    }
+  // ---------- Beautiful Waiting Slide ----------
+  function tileHTML(d){
+    return `
+      <div class="tile" data-id="${d.id}">
+        <div class="num">#${esc(d.DonorID)}</div>
+        <div class="info">
+          <div class="name">${esc(d.FullName)}</div>
+          <div class="badges">
+            <span class="badge ${d.PreRegistered ? 'pre' : 'walk'}">${d.PreRegistered ? 'Pre-Registered' : 'Walk-In'}</span>
+            <span class="badge">Waiting</span>
+          </div>
+        </div>
+      </div>
+    `;
   }
 
-  // fullscreen for slide
-  const slideFsBtn = $('slideFs');
-  if (slideFsBtn){
-    slideFsBtn.addEventListener('click', ()=>{
-      const pane = $('slide');
-      if (!document.fullscreenElement) (pane || document.documentElement).requestFullscreen().catch(()=>{});
-      else document.exitFullscreen();
+  // diff render for slide (only updates what changed)
+  function diffRender(containerId, items, renderItem){
+    const el = $(containerId);
+    const existing = new Map([...el.children].map(ch => [ch.getAttribute('data-id'), ch]));
+    const nextIds = new Set(items.map(x => x.id));
+
+    // remove stale
+    existing.forEach((node, id) => { if (!nextIds.has(id)) node.remove(); });
+
+    // build in order
+    const frag = document.createDocumentFragment();
+    items.forEach(item => {
+      let node = existing.get(item.id);
+      if (!node) {
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = renderItem(item).trim();
+        node = wrapper.firstElementChild;
+        node.classList.add('flash');
+        setTimeout(()=> node.classList.remove('flash'), 900);
+      } else {
+        // minimal patch: replace inner content except container attrs
+        node.outerHTML = renderItem(item).trim();
+        node = el.querySelector(`[data-id="${item.id}"]`);
+      }
+      frag.appendChild(node);
     });
+
+    // replace content fast
+    el.innerHTML = '';
+    el.appendChild(frag);
   }
 
-  // render all
+  // fullscreen control
+  $('slideFs')?.addEventListener('click', ()=>{
+    const pane = $('slide');
+    if (!document.fullscreenElement) (pane || document.documentElement).requestFullscreen().catch(()=>{});
+    else document.exitFullscreen();
+  });
+
+  // clock in slide
+  function tickClock(){
+    const c = $('slideClock'); if (!c) return;
+    const d = new Date();
+    const hh = String(d.getHours()).padStart(2,'0');
+    const mm = String(d.getMinutes()).padStart(2,'0');
+    c.textContent = `${hh}:${mm}`;
+  }
+  setInterval(tickClock, 1000); tickClock();
+
+  // ---------- Throttled render ----------
+  let renderTimer = null;
+  function scheduleRender(){
+    if (renderTimer) return;
+    renderTimer = setTimeout(()=>{ renderTimer = null; render(); }, 100);
+  }
+
   function render(){
     const donors = state.donors || [];
     const waitingN  = donors.filter(d=>d.Status==='Waiting').length;
@@ -366,7 +441,7 @@
     const queueN    = donors.filter(d=>d.Status==='Donation-Queue').length;
     const bedsN     = donors.filter(d=>d.Status==='Donation-In-Progress').length;
 
-    $('stats').textContent = 'Waiting: '+waitingN+' • Screening: '+screenN+' • Chairs: '+queueN+'/6 • Beds: '+bedsN+'/6';
+    $('stats').textContent = `Waiting: ${waitingN} • Screening: ${screenN} • Chairs: ${queueN}/6 • Beds: ${bedsN}/6`;
 
     $('listWaiting').innerHTML = donors
       .filter(d=>d.Status==='Waiting')
@@ -408,13 +483,19 @@
       .join('') || '<div class="text-sm muted">No rejected donors.</div>';
 
     $('kWaiting').textContent = waitingN;
-    $('kQueue').textContent   = queueN+'/6';
-    $('kBeds').textContent    = bedsN+'/6';
+    $('kQueue').textContent   = `${queueN}/6`;
+    $('kBeds').textContent    = `${bedsN}/6`;
 
-    renderWaitingSlide(donors);
+    // Beautiful Waiting Slide: show top 12 "Waiting"
+    const w = donors
+      .filter(d => d.Status === 'Waiting')
+      .sort((a,b)=> new Date(a.RegisteredAt||0) - new Date(b.RegisteredAt||0))
+      .slice(0, 12);
+    diffRender('slideGrid', w, tileHTML);
   }
 
-  render();
+  // initial render
+  scheduleRender();
 })();
 </script>
 </body>
